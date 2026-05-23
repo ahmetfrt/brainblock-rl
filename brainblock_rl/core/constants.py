@@ -1,0 +1,39 @@
+"""Shared constants for the BrainBlock environment."""
+
+from __future__ import annotations
+
+BOARD_WIDTH = 8
+BOARD_HEIGHT = 5
+BOARD_SHAPE = (BOARD_HEIGHT, BOARD_WIDTH)
+
+PIECE_TYPES = ("I", "O", "L", "Z", "T")
+PIECE_TO_INDEX = {piece: index for index, piece in enumerate(PIECE_TYPES)}
+INDEX_TO_PIECE = {index: piece for piece, index in PIECE_TO_INDEX.items()}
+
+PIECES_PER_TYPE = 2
+TOTAL_PIECES = len(PIECE_TYPES) * PIECES_PER_TYPE
+CELLS_PER_PIECE = 4
+
+ORIENTATION_COUNT = 8
+ACTION_SPACE_SIZE = ORIENTATION_COUNT * BOARD_WIDTH * BOARD_HEIGHT
+
+EMPTY_CELL = 0
+FILLED_CELL_MIN = 1
+FILLED_CELL_MAX = len(PIECE_TYPES)
+
+__all__ = [
+    "ACTION_SPACE_SIZE",
+    "BOARD_HEIGHT",
+    "BOARD_SHAPE",
+    "BOARD_WIDTH",
+    "CELLS_PER_PIECE",
+    "EMPTY_CELL",
+    "FILLED_CELL_MAX",
+    "FILLED_CELL_MIN",
+    "INDEX_TO_PIECE",
+    "ORIENTATION_COUNT",
+    "PIECES_PER_TYPE",
+    "PIECE_TO_INDEX",
+    "PIECE_TYPES",
+    "TOTAL_PIECES",
+]
