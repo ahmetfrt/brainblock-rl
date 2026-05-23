@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
+import numpy as np
+
 from brainblock_rl.core.constants import (
     ACTION_SPACE_SIZE,
     BOARD_HEIGHT,
@@ -47,6 +49,34 @@ def decode_action(action_id: int) -> Action:
     return Action(orientation=orientation, x=x, y=y)
 
 
+def legal_action_mask(env: object) -> np.ndarray:
+    """Return a length-320 boolean mask for legal actions in an environment.
+
+    The mask is an auxiliary helper only: the environment action space remains
+    ``Discrete(320)``. If the current episode is done or no queue-head piece is
+    available, every entry is ``False``.
+    """
+
+    from brainblock_rl.core.legality import is_legal_placement
+
+    mask = np.zeros(ACTION_SPACE_SIZE, dtype=bool)
+    if getattr(env, "_terminated", False):
+        return mask
+
+    queue = getattr(env, "queue", None)
+    if not queue:
+        return mask
+
+    board = getattr(env, "board")
+    piece = queue[0]
+    for orientation in range(ORIENTATION_COUNT):
+        for y in range(BOARD_HEIGHT):
+            for x in range(BOARD_WIDTH):
+                if is_legal_placement(board, piece, orientation, x, y):
+                    mask[encode_action(orientation, x, y)] = True
+    return mask
+
+
 flatten_action = encode_action
 unflatten_action = decode_action
 
@@ -55,5 +85,6 @@ __all__ = [
     "decode_action",
     "encode_action",
     "flatten_action",
+    "legal_action_mask",
     "unflatten_action",
 ]

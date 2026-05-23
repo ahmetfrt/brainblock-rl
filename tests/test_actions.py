@@ -5,8 +5,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from brainblock_rl.core.actions import decode_action, encode_action
+import numpy as np
+
+from brainblock_rl.core.actions import decode_action, encode_action, legal_action_mask
 from brainblock_rl.core.constants import ACTION_SPACE_SIZE
+from brainblock_rl.envs.brainblock_env import BrainBlockEnv
 
 
 @pytest.mark.parametrize(
@@ -42,3 +45,26 @@ def test_decode_rejects_out_of_range_action(action_id):
 def test_encode_rejects_out_of_range_components(orientation, x, y):
     with pytest.raises(ValueError):
         encode_action(orientation, x, y)
+
+
+def test_legal_action_mask_has_action_space_shape_and_bool_dtype():
+    env = BrainBlockEnv()
+    env.reset(seed=0)
+
+    mask = legal_action_mask(env)
+
+    assert mask.shape == (ACTION_SPACE_SIZE,)
+    assert mask.dtype == np.bool_
+    assert mask.any()
+
+
+def test_legal_action_mask_is_false_when_done_or_queue_empty():
+    env = BrainBlockEnv()
+    env.reset(seed=0)
+
+    env.queue = []
+    assert not legal_action_mask(env).any()
+
+    env.reset(seed=0)
+    env._terminated = True
+    assert not legal_action_mask(env).any()

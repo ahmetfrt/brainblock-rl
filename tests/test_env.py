@@ -8,6 +8,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from brainblock_rl.core.actions import encode_action
 from brainblock_rl.core.constants import ACTION_SPACE_SIZE
 from brainblock_rl.envs.brainblock_env import BrainBlockEnv
+from brainblock_rl.evaluation.metrics import aggregate_rollouts
+from brainblock_rl.evaluation.rollout import (
+    RolloutResult,
+    legal_random_policy,
+    random_policy,
+    rollout_episode,
+)
 
 
 def test_reset_returns_valid_observation_and_initial_queue():
@@ -89,3 +96,59 @@ def test_out_of_range_action_hard_terminates():
     assert terminated
     assert not truncated
     assert info["invalid_reason"] == "action_out_of_range"
+
+
+def test_legal_random_rollout_returns_structured_result():
+    env = BrainBlockEnv()
+
+    result = rollout_episode(env, legal_random_policy, seed=0)
+
+    assert result.episode_length >= 1
+    assert len(result.actions) == result.episode_length
+    assert result.invalid_actions in (0, 1)
+    assert len(result.placed_pieces) == result.episode_length - result.invalid_actions
+    assert result.final_covered_area == 4 * len(result.placed_pieces)
+
+
+def test_random_rollout_returns_structured_result():
+    env = BrainBlockEnv()
+
+    result = rollout_episode(env, random_policy, seed=0)
+
+    assert result.episode_length >= 1
+    assert len(result.actions) == result.episode_length
+    assert all(0 <= action < ACTION_SPACE_SIZE for action in result.actions)
+    assert result.invalid_actions >= 0
+    assert result.final_covered_area == 4 * len(result.placed_pieces)
+
+
+def test_metrics_aggregation():
+    results = [
+        RolloutResult(
+            total_reward=40.0,
+            episode_length=10,
+            success=True,
+            invalid_actions=0,
+            final_covered_area=40,
+            actions=list(range(10)),
+            placed_pieces=["I"] * 10,
+        ),
+        RolloutResult(
+            total_reward=7.0,
+            episode_length=3,
+            success=False,
+            invalid_actions=1,
+            final_covered_area=8,
+            actions=[0, 1, 2],
+            placed_pieces=["O", "T"],
+        ),
+    ]
+
+    metrics = aggregate_rollouts(results)
+
+    assert metrics.episodes == 2
+    assert metrics.success_rate == 0.5
+    assert metrics.mean_episodic_return == 23.5
+    assert metrics.mean_episode_length == 6.5
+    assert metrics.invalid_action_rate == 1 / 13
+    assert metrics.mean_final_covered_area == 24.0
