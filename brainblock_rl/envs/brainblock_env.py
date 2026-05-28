@@ -8,7 +8,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from brainblock_rl.core.actions import decode_action
+from brainblock_rl.core.actions import decode_action, legal_action_mask
 from brainblock_rl.core.constants import (
     ACTION_SPACE_SIZE,
     BOARD_SHAPE,
@@ -23,7 +23,7 @@ from brainblock_rl.core.observations import (
     remaining_piece_counts,
 )
 from brainblock_rl.core.pieces import create_initial_queue
-from brainblock_rl.core.rewards import compute_step_reward, covered_area
+from brainblock_rl.core.rewards import compute_step_reward, covered_area, validate_reward_mode
 
 
 class BrainBlockEnv(gym.Env):
@@ -35,11 +35,17 @@ class BrainBlockEnv(gym.Env):
 
     metadata = {"render_modes": ["ansi", "human"], "render_fps": 4}
 
-    def __init__(self, render_mode: str | None = None) -> None:
+    def __init__(
+        self,
+        render_mode: str | None = None,
+        *,
+        reward_mode: str = "placeholder",
+    ) -> None:
         if render_mode not in (None, "ansi", "human"):
             raise ValueError(f"Unsupported render_mode: {render_mode}")
 
         self.render_mode = render_mode
+        self.reward_mode = validate_reward_mode(reward_mode)
         self.action_space = spaces.Discrete(ACTION_SPACE_SIZE)
         self.observation_space = make_observation_space()
 
@@ -80,14 +86,26 @@ class BrainBlockEnv(gym.Env):
             self._terminated = True
             info = self._get_info()
             info.update({"legal": False, "invalid_reason": "action_out_of_range"})
-            return self._get_obs(), compute_step_reward(False), True, False, info
+            return (
+                self._get_obs(),
+                compute_step_reward(False, reward_mode=self.reward_mode),
+                True,
+                False,
+                info,
+            )
 
         decoded = decode_action(int(action))
         if not self.queue:
             self._terminated = True
             info = self._get_info()
             info.update({"legal": False, "invalid_reason": "empty_queue", "action": decoded})
-            return self._get_obs(), compute_step_reward(False), True, False, info
+            return (
+                self._get_obs(),
+                compute_step_reward(False, reward_mode=self.reward_mode),
+                True,
+                False,
+                info,
+            )
 
         current_piece = self.queue[0]
         if not is_legal_placement(
@@ -107,7 +125,13 @@ class BrainBlockEnv(gym.Env):
                     "legal": False,
                 }
             )
-            return self._get_obs(), compute_step_reward(False), True, False, info
+            return (
+                self._get_obs(),
+                compute_step_reward(False, reward_mode=self.reward_mode),
+                True,
+                False,
+                info,
+            )
 
         place_piece(
             self.board,
@@ -119,17 +143,24 @@ class BrainBlockEnv(gym.Env):
         )
         self.queue.pop(0)
         self._terminated = len(self.queue) == 0
+        next_legal_action_count = (
+            None if self._terminated else int(np.count_nonzero(legal_action_mask(self)))
+        )
 
         reward = compute_step_reward(
             True,
             CELLS_PER_PIECE,
             terminated=self._terminated,
+            reward_mode=self.reward_mode,
+            board=self.board,
+            next_legal_action_count=next_legal_action_count,
         )
         info = self._get_info()
         info.update(
             {
                 "action": decoded,
                 "legal": True,
+                "next_legal_action_count": next_legal_action_count,
                 "placed_cells": CELLS_PER_PIECE,
                 "placed_piece": current_piece,
             }
@@ -153,6 +184,7 @@ class BrainBlockEnv(gym.Env):
             "covered_area": covered_area(self.board),
             "queue": tuple(self.queue),
             "remaining_counts": remaining_piece_counts(self.queue),
+            "reward_mode": self.reward_mode,
         }
 
     def _board_to_string(self) -> str:
